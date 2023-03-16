@@ -22,19 +22,6 @@ binary.switch <- function(val, switch=FALSE) {
   }
 }
 
-# Hospital Stays (701)
-# NA values are -1 and -2. Discrete
-# Check
-
-# ER visits (705)
-# NA values are -1 and -2. Discrete
-# Check
-
-# Doctor visits (709)
-# NA values are -1 and -2. Discrete
-# Check
-
-
 # Frailty Status (2168)
 # Calculate leg stand indicator from non NA value
 get.ls.indicator <- function(achieved, value) {
@@ -99,30 +86,6 @@ get.frailty.status <- function(row, df) {
   }
 }
 
-
-# Cognitive Functioning (64)
-# NA values are -10. Discrete
-# Check
-
-# Diabetes (360)
-# NA values are -1. Binary
-# Check
-
-# Age (13)
-# No NA values. Discrete
-# Check
-
-# Sex (12)
-# No NA values. Binary
-# Check
-
-# Race (1428)
-# NA values are -1, -2, -5. Discrete
-
-# Education (83)
-# NA values are -1. Discrete
-# Check
-
 # Summed Vascular Disease Score (2169)
 get.vd.score <- function(row) {
   vals <- c(row[[352]], row[[414]], row[[419]], row[[426]])
@@ -133,16 +96,23 @@ get.vd.score <- function(row) {
     sum(binary.switch(vals))
   }
 }
-# Check
 
-# Obese (1461)
-# NA values are NA. Binary
-# Check
+# Other illness index
+get.health.score <- function(row) {
+  vals <- c(row[[378]], row[[383]], row[[401]],
+            row[[407]], row[[438]], row[[450]],
+            row[[457]])
+  
+  if (any(check.na(vals))) {
+    NA
+  } else {
+    sum(binary.switch(vals))
+  }
+}
 
 # Depression (642)
 # NA values are -5 and 99. Discrete
 wave.one[wave.one[, 642] == 99, 642] <- -1
-# Check
 
 # Sum of Katz and Lawton Indices (2170)
 convert.to.binary <- function(vals) {
@@ -152,9 +122,9 @@ convert.to.binary <- function(vals) {
 
 get.kl.score <- function(row) {
   vals <- c(row[[1071]], row[[1074]], row[[1077]], row[[1080]],
-           row[[1083]], row[[1086]], row[[1049]], row[[1052]],
-           row[[1055]], row[[1058]], row[[1061]], row[[1064]],
-           row[[1067]])
+            row[[1083]], row[[1086]], row[[1049]], row[[1052]],
+            row[[1055]], row[[1058]], row[[1061]], row[[1064]],
+            row[[1067]])
   
   if (any(check.na(vals))) {
     NA
@@ -162,7 +132,6 @@ get.kl.score <- function(row) {
     sum(convert.to.binary(vals))
   }
 }
-# Check
 
 # Health Insurance (696)
 # NA values are NA and -1. Discrete
@@ -171,23 +140,52 @@ wave.one[wave.one[, 696] == 1, 696] <- 0
 wave.one[(wave.one[, 696] == 2) | (wave.one[, 696] == 3), 696] <- 1
 wave.one[(wave.one[, 696] > 3) & (wave.one[, 696] < 13), 696] <- 2
 wave.one[wave.one[, 696] == -1, 696] <- 3
-# Check
-
-# Barriers to Care 1 (742)
-# NA values are -1 and -2. Binary
-# Check
 
 # Household Size (71)
 # No NA values. Discrete
 wave.one[wave.one[, 71] != 1, 71] <- 0
-# Check
+
+# Cognitive Functioning (64)
+# NA values are -10. Discrete
+
+# Diabetes (360)
+# NA values are -1. Binary
+
+# Age (13)
+# No NA values. Discrete
+
+# Sex (12)
+# No NA values. Binary
+
+# Race (1428)
+# NA values are -1, -2, -5. Discrete
+
+# Education (83)
+# NA values are -1. Discrete
+
+# Hospital Stays (701)
+# NA values are -1 and -2. Discrete
+
+# ER visits (705)
+# NA values are -1 and -2. Discrete
+
+# Doctor visits (709)
+# NA values are -1 and -2. Discrete
+
+# Obese (1461)
+# NA values are NA. Binary
+
+# Barriers to Care 1 (742)
+# NA values are -1 and -2. Binary
 
 # Iterate through dataframe once to calculate: Frailty Status, Summed
-# Vascular Disease Score, Sum of Katz and Lawton Indices
+# Vascular Disease Score, Sum of Katz and Lawton Indices, and Household
+# Size
 
 frailty.status <- vector(mode="integer", length=n)
 vd.score <- vector(mode="integer", length=n)
 kl.score <- vector(mode="integer", length=n)
+ill.score <- vector(mode="integer", length=n)
 for (i in 1:n) {
   row <- wave.one[i, ]
   
@@ -199,22 +197,24 @@ for (i in 1:n) {
   
   # Sum of Katz and Lawton Indices
   kl.score[i] <- get.kl.score(row)
+  
+  ill.score[i] <- get.health.score(row)
 }
 
 # Add constructed features to dataset
-wave.one <- cbind(wave.one, frailty.status, vd.score, kl.score)
+wave.one <- cbind(wave.one, frailty.status, vd.score, kl.score, ill.score)
 
 # Remove if proxy was needed
 wave.one <- wave.one[wave.one[, 6] != 26, ]
 
-# Get indices of all relevant features and caseid
-indices <- c(1, 701, 705, 709, 2168, 2169, 2170, 71, 696,
+# Get indices of all relevant features
+indices <- c(701, 705, 709, 2168, 2169, 2170, 71, 696,
              64, 360, 13, 12, 1428, 83, 1461, 642, 742)
 
 # Remove if missing variables of interest (besides frailty status)
 mask <- rep(TRUE, dim(wave.one)[1])
 for (index in indices) {
-  if (index != 2168 && index != 1) {
+  if (index != 2168) {
     mask <- mask & !check.na(wave.one[, index])
   } 
 }
@@ -224,13 +224,18 @@ wave.one <- wave.one[mask, ]
 wave.one <- wave.one[!check.na(wave.one[, 2168]), ]
 
 # Remove unwanted features
+
+indices <- c(indices, c(1, 3, 598, 589, 643, 693, 1269, 2171))
 wave.one <- wave.one[, indices]
 
 # Add new feature names
-names(wave.one) <- c("id", "hosp.stays", "er.visits", "doctor.visits", "frailty.status",
+names(wave.one) <- c("hosp.stays", "er.visits",
+                     "doctor.visits", "frailty.status",
                      "vd.score", "kl.score", "alone", "insurance",
                      "cog.func", "diabetes", "age", "sex", "race", 
-                     "education", "obese", "depress", "barriers")
+                     "education", "obese", "depress", "barriers",
+                     "id", "locality", "smoking", "alcohol",
+                     "child.econ.sit", "home.rems", "mon.income", "ill.score")
 
 # Get wave two reponse counts for all individuals in restricted wave one table
 mask <- vector(mode="logical")
@@ -248,4 +253,3 @@ data <- wave.one
 
 rm(wave.one)
 rm(wave.two)
-
